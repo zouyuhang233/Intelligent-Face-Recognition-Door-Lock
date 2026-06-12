@@ -1,0 +1,1323 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>人脸识别智能锁控制</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --radius:0.75rem;
+  --background:oklch(0.985 0.002 260);
+  --foreground:oklch(0.145 0.05 265);
+  --card:oklch(1 0 0);
+  --card-foreground:oklch(0.145 0.05 265);
+  --primary:oklch(0.45 0.18 265);
+  --primary-foreground:oklch(0.985 0.002 260);
+  --secondary:oklch(0.955 0.012 265);
+  --secondary-foreground:oklch(0.25 0.06 265);
+  --muted:oklch(0.955 0.012 265);
+  --muted-foreground:oklch(0.5 0.04 265);
+  --accent:oklch(0.955 0.015 265);
+  --accent-foreground:oklch(0.25 0.06 265);
+  --destructive:oklch(0.58 0.22 25);
+  --border:oklch(0.91 0.015 265);
+  --input:oklch(0.91 0.015 265);
+  --ring:oklch(0.45 0.18 265);
+  --chart-2:oklch(0.65 0.16 160);
+  --chart-3:oklch(0.55 0.15 40);
+}
+body{
+  font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC',sans-serif;
+  background:var(--background);color:var(--foreground);
+  min-height:100vh;-webkit-font-smoothing:antialiased;
+}
+input,button,select,textarea{font-family:inherit}
+
+/* ===== Global Animations ===== */
+@keyframes fade-in{from{opacity:0}to{opacity:1}}
+@keyframes fade-in-up{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
+@keyframes fade-in-down{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)}}
+@keyframes fade-in-left{from{opacity:0;transform:translateX(-12px)}to{opacity:1;transform:translateX(0)}}
+@keyframes fade-in-right{from{opacity:0;transform:translateX(12px)}to{opacity:1;transform:translateX(0)}}
+@keyframes scale-in{from{opacity:0;transform:scale(0.95)}to{opacity:1;transform:scale(1)}}
+@keyframes slide-up{from{opacity:0;transform:translateY(24px)}to{opacity:1;transform:translateY(0)}}
+@keyframes pop-in{0%{opacity:0;transform:scale(0.8)}60%{transform:scale(1.05)}100%{opacity:1;transform:scale(1)}}
+@keyframes shimmer{0%{background-position:-200% 0}100%{background-position:200% 0}}
+@keyframes shake{0%,100%{transform:translateX(0)}20%,60%{transform:translateX(-3px)}40%,80%{transform:translateX(3px)}}
+@keyframes pulse-glow{0%,100%{box-shadow:0 0 0 0 oklch(0.45 0.18 265 / 0)}50%{box-shadow:0 0 0 8px oklch(0.45 0.18 265 / 0.15)}}
+@keyframes bounce-in{0%{opacity:0;transform:scale(0.3)}50%{transform:scale(1.05)}70%{transform:scale(0.95)}100%{opacity:1;transform:scale(1)}}
+@keyframes slide-down{from{opacity:0;max-height:0;transform:translateY(-10px)}to{opacity:1;max-height:500px;transform:translateY(0)}}
+@keyframes count-up{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+@keyframes ripple{0%{transform:scale(0);opacity:0.5}100%{transform:scale(2.5);opacity:0}}
+@keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}
+@keyframes glow{0%,100%{filter:brightness(1)}50%{filter:brightness(1.2)}}
+
+/* ===== Header ===== */
+.header{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:0 24px;height:56px;
+  background:var(--card);border-bottom:1px solid var(--border);
+  position:sticky;top:0;z-index:50;
+  animation:fade-in-down 0.4s ease;
+}
+.header-l{display:flex;align-items:center;gap:8px}
+.header-title{font-size:15px;font-weight:600;letter-spacing:-0.3px}
+.header-sep{width:1px;height:20px;background:var(--border);margin:0 4px}
+.header-sub{font-size:13px;color:var(--muted-foreground)}
+
+/* Status badge */
+.badge{
+  display:inline-flex;align-items:center;gap:5px;
+  padding:3px 10px;border-radius:9999px;font-size:12px;font-weight:500;
+  border:1px solid transparent;
+}
+.badge.off{background:oklch(0.97 0.02 25);color:oklch(0.55 0.18 25);border-color:oklch(0.9 0.06 25)}
+.badge.on{background:oklch(0.97 0.03 155);color:oklch(0.45 0.14 155);border-color:oklch(0.9 0.08 155)}
+.badge.ld{background:var(--muted);color:var(--muted-foreground)}
+.badge.offline{background:oklch(0.97 0.03 80);color:oklch(0.5 0.14 80);border-color:oklch(0.9 0.08 80)}
+.badge-dot{width:6px;height:6px;border-radius:50%}
+.badge.off .badge-dot{background:oklch(0.55 0.18 25)}
+.badge.on .badge-dot{background:oklch(0.45 0.14 155);animation:dot-pulse 2s infinite}
+.badge.ld .badge-dot{background:var(--muted-foreground);animation:dot-pulse 0.7s infinite}
+.badge.offline .badge-dot{background:oklch(0.5 0.14 80)}
+@keyframes dot-pulse{0%,100%{opacity:1}50%{opacity:0.3}}
+
+/* ===== Layout ===== */
+.main{max-width:1080px;margin:0 auto;padding:24px}
+.page-head{
+  margin-bottom:24px;
+  animation:slide-up 0.5s ease;
+}
+.page-head h1{
+  font-size:24px;font-weight:700;letter-spacing:-0.5px;margin-bottom:4px;
+  animation:fade-in-left 0.4s ease 0.1s backwards;
+}
+.page-head p{
+  font-size:14px;color:var(--muted-foreground);
+  animation:fade-in-left 0.4s ease 0.15s backwards;
+}
+
+/* ===== Card ===== */
+.card{
+  background:var(--card);border:1px solid var(--border);
+  border-radius:var(--radius);overflow:hidden;
+  transition:all 0.3s cubic-bezier(0.4,0,0.2,1);
+  animation:fade-in-up 0.5s ease backwards;
+}
+.card:hover{
+  box-shadow:0 1px 3px oklch(0 0 0 / 0.04),0 4px 12px oklch(0 0 0 / 0.03);
+  transform:translateY(-2px);
+}
+
+/* Stagger animations for grid children */
+.grid-4 .card:nth-child(1){animation-delay:0.05s}
+.grid-4 .card:nth-child(2){animation-delay:0.1s}
+.grid-4 .card:nth-child(3){animation-delay:0.15s}
+.grid-4 .card:nth-child(4){animation-delay:0.2s}
+.grid-2 .card:nth-child(1){animation-delay:0.25s}
+.grid-2 .card:nth-child(2){animation-delay:0.3s}
+.card-header{
+  padding:16px 20px;border-bottom:1px solid var(--border);
+  display:flex;align-items:center;justify-content:space-between;
+}
+.card-header h2{font-size:15px;font-weight:600;letter-spacing:-0.3px}
+.card-header p{font-size:13px;color:var(--muted-foreground);margin-top:2px}
+.card-body{padding:20px}
+
+/* ===== Tabs ===== */
+.tabs{
+  display:flex;gap:2px;background:var(--muted);border-radius:var(--radius);padding:4px;width:fit-content;margin-bottom:20px;
+  animation:fade-in-up 0.4s ease 0.15s backwards;
+  position:relative;
+}
+.tab{
+  padding:6px 16px;border-radius:calc(var(--radius) - 4px);
+  font-size:13px;font-weight:500;cursor:pointer;
+  border:none;background:transparent;color:var(--muted-foreground);
+  transition:color 0.3s;z-index:1;position:relative;
+}
+.tab:hover:not(.active){color:var(--foreground)}
+.tab-indicator{
+  position:absolute;top:4px;height:calc(100% - 8px);
+  background:var(--card);border-radius:calc(var(--radius) - 4px);
+  box-shadow:0 1px 2px oklch(0 0 0 / 0.05);
+  transition:left 0.4s cubic-bezier(0.34,1.2,0.64,1),width 0.4s cubic-bezier(0.34,1.2,0.64,1);
+  pointer-events:none;
+}
+
+/* ===== Grid ===== */
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px}
+.grid-4{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
+@media(max-width:768px){
+  .grid-2,.grid-3,.grid-4{grid-template-columns:1fr}
+}
+
+/* ===== Stat Card ===== */
+.stat-card .stat-header{display:flex;flex-direction:row;align-items:center;justify-content:space-between;gap:0;padding-bottom:8px}
+.stat-card .stat-label{font-size:13px;font-weight:500;color:var(--foreground)}
+.stat-card .stat-icon{
+  color:var(--muted-foreground);
+  transition:all 0.3s;
+}
+.stat-card:hover .stat-icon{
+  color:var(--primary);
+  transform:rotate(-5deg) scale(1.1);
+}
+.stat-card .stat-value{
+  font-size:24px;font-weight-bold;letter-spacing:-0.5px;font-weight:700;
+  transition:all 0.3s;
+}
+.stat-card .stat-desc{font-size:12px;color:var(--muted-foreground);margin-top:2px}
+.stat-card:hover .stat-value{color:var(--primary)}
+
+/* ===== Lock Section ===== */
+.lock-display{
+  display:flex;align-items:center;gap:24px;
+}
+@media(max-width:600px){.lock-display{flex-direction:column;text-align:center}}
+.lock-ring{
+  width:88px;height:88px;border-radius:50%;flex-shrink:0;
+  display:flex;align-items:center;justify-content:center;
+  font-size:36px;
+  border:2px solid var(--border);background:var(--muted);
+  transition:all 0.4s cubic-bezier(0.34,1.56,0.64,1);
+  position:relative;
+}
+.lock-ring::after{
+  content:'';position:absolute;inset:-4px;border-radius:50%;
+  border:2px solid transparent;transition:all 0.4s;
+}
+.lock-ring.locked{
+  border-color:oklch(0.7 0.15 25);background:oklch(0.97 0.02 25);
+  animation:pop-in 0.4s ease;
+}
+.lock-ring.locked::after{border-color:oklch(0.7 0.15 25 / 0.3)}
+.lock-ring.unlocked{
+  border-color:oklch(0.7 0.14 155);background:oklch(0.97 0.03 155);
+  animation:pop-in 0.4s ease;
+}
+.lock-ring.unlocked::after{border-color:oklch(0.7 0.14 155 / 0.3)}
+.lock-ring:hover{transform:scale(1.05)}
+.lock-info{flex:1}
+.lock-status{font-size:20px;font-weight:700;letter-spacing:-0.5px;margin-bottom:2px}
+.lock-status.locked{color:oklch(0.5 0.18 25)}.lock-status.unlocked{color:oklch(0.45 0.14 155)}
+.lock-time{font-size:13px;color:var(--muted-foreground);margin-bottom:12px}
+.lock-btns{display:flex;gap:8px}
+@media(max-width:600px){.lock-btns{justify-content:center}}
+
+/* ===== Buttons ===== */
+.btn{
+  display:inline-flex;align-items:center;justify-content:center;gap:6px;
+  padding:8px 16px;border-radius:calc(var(--radius) - 2px);
+  font-size:13px;font-weight:500;cursor:pointer;
+  border:1px solid var(--border);background:var(--card);color:var(--foreground);
+  transition:all 0.2s cubic-bezier(0.4,0,0.2,1);white-space:nowrap;
+  position:relative;overflow:hidden;
+}
+.btn::before{
+  content:'';position:absolute;inset:0;
+  background:radial-gradient(circle at var(--x,50%) var(--y,50%),oklch(0 0 0 / 0.06),transparent 60%);
+  opacity:0;transition:opacity 0.3s;
+}
+.btn:hover::before{opacity:1}
+.btn:hover{background:var(--accent);color:var(--accent-foreground);transform:translateY(-1px);box-shadow:0 2px 8px oklch(0 0 0 / 0.06)}
+.btn:active{transform:translateY(0) scale(0.98);box-shadow:none}
+.btn:disabled{opacity:0.5;pointer-events:none;transform:none;box-shadow:none}
+.btn-primary{background:var(--primary);color:var(--primary-foreground);border-color:var(--primary)}
+.btn-primary:hover{background:oklch(0.4 0.18 265);border-color:oklch(0.4 0.18 265);box-shadow:0 4px 12px oklch(0.45 0.18 265 / 0.25)}
+.btn-primary:active{box-shadow:0 1px 4px oklch(0.45 0.18 265 / 0.2)}
+.btn-destructive{background:var(--destructive);color:#fff;border-color:var(--destructive)}
+.btn-destructive:hover{background:oklch(0.52 0.22 25);border-color:oklch(0.52 0.22 25);box-shadow:0 4px 12px oklch(0.58 0.22 25 / 0.25)}
+.btn-destructive:active{box-shadow:0 1px 4px oklch(0.58 0.22 25 / 0.2)}
+.btn-success{background:oklch(0.45 0.14 155);color:#fff;border-color:oklch(0.45 0.14 155)}
+.btn-success:hover{background:oklch(0.4 0.14 155);border-color:oklch(0.4 0.14 155);box-shadow:0 4px 12px oklch(0.45 0.14 155 / 0.25)}
+.btn-success:active{box-shadow:0 1px 4px oklch(0.45 0.14 155 / 0.2)}
+.btn-sm{padding:5px 12px;font-size:12px}
+
+/* ===== Table / List ===== */
+.data-list{width:100%}
+.data-row{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:10px 0;border-bottom:1px solid var(--border);
+  font-size:13px;
+  transition:all 0.2s;
+  animation:fade-in-left 0.3s ease backwards;
+}
+.data-row:nth-child(1){animation-delay:0.1s}
+.data-row:nth-child(2){animation-delay:0.15s}
+.data-row:nth-child(3){animation-delay:0.2s}
+.data-row:nth-child(4){animation-delay:0.25s}
+.data-row:last-child{border-bottom:none}
+.data-row:hover{background:var(--muted);border-radius:8px;padding-left:8px;padding-right:8px}
+.data-label{color:var(--foreground);font-weight:500}
+.data-actions{display:flex;gap:6px;align-items:center}
+.data-value{
+  font-size:12px;font-weight:600;padding:2px 8px;border-radius:6px;
+  transition:all 0.3s;
+}
+.data-value.on{background:oklch(0.97 0.03 155);color:oklch(0.4 0.14 155);animation:pop-in 0.3s ease}
+.data-value.off{background:var(--muted);color:var(--muted-foreground)}
+
+/* ===== Recognition Log ===== */
+.recog-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media(max-width:500px){.recog-grid{grid-template-columns:1fr}}
+.recog-item{
+  padding:14px;border-radius:calc(var(--radius) - 2px);
+  border:1px solid var(--border);text-align:center;
+  transition:all 0.3s;
+  animation:fade-in-up 0.4s ease backwards;
+}
+.recog-item:nth-child(1){animation-delay:0.35s}
+.recog-item:nth-child(2){animation-delay:0.4s}
+.recog-item:hover{transform:translateY(-2px);box-shadow:0 4px 12px oklch(0 0 0 / 0.04)}
+.recog-item.fail{background:oklch(0.98 0.01 25);border-color:oklch(0.93 0.04 25)}
+.recog-item.success{background:oklch(0.98 0.015 155);border-color:oklch(0.93 0.05 155)}
+.recog-label{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px}
+.recog-item.fail .recog-label{color:oklch(0.5 0.18 25)}
+.recog-item.success .recog-label{color:oklch(0.4 0.14 155)}
+.recog-time{font-size:13px;color:var(--foreground);font-weight:500;transition:all 0.3s}
+
+/* ===== Config ===== */
+.collapse-trigger{
+  display:flex;align-items:center;gap:6px;cursor:pointer;
+  font-size:13px;font-weight:500;color:var(--foreground);
+  padding:0;user-select:none;background:none;border:none;
+  font-family:inherit;
+}
+.collapse-trigger:hover{color:var(--primary)}
+.collapse-arrow{transition:transform 0.2s;font-size:10px;color:var(--muted-foreground)}
+.collapse-content{max-height:0;overflow:hidden;transition:max-height 0.3s}
+.collapse-content.open{max-height:500px}
+.form-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-top:16px}
+@media(max-width:700px){.form-grid{grid-template-columns:1fr}}
+.form-group{display:flex;flex-direction:column;gap:4px}
+.form-group.full{grid-column:1/-1}
+.form-group label{font-size:12px;font-weight:500;color:var(--foreground)}
+.form-group input{
+  padding:7px 10px;border-radius:calc(var(--radius) - 2px);
+  font-size:13px;border:1px solid var(--input);
+  background:var(--card);color:var(--foreground);outline:none;
+  transition:all 0.2s cubic-bezier(0.4,0,0.2,1);
+}
+.form-group input:focus{border-color:var(--ring);box-shadow:0 0 0 3px oklch(0.45 0.18 265 / 0.12);transform:translateY(-1px)}
+.form-group input:hover:not(:focus){border-color:oklch(0.7 0.04 265)}
+.form-group input::placeholder{color:var(--muted-foreground)}
+.form-actions{display:flex;gap:8px;margin-top:12px}
+
+/* ===== Log ===== */
+.log-box{
+  max-height:300px;overflow-y:auto;
+  font-family:'JetBrains Mono','SF Mono','Consolas',monospace;
+  font-size:12px;line-height:1.7;
+}
+.log-box::-webkit-scrollbar{width:4px}
+.log-box::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+.log-line{display:flex;gap:8px;padding:1px 0;color:var(--muted-foreground)}
+.log-line .t{flex-shrink:0;opacity:0.5}
+.log-line .m{word-break:break-all}
+.log-line .m.ok{color:oklch(0.45 0.14 155)}.log-line .m.er{color:var(--destructive)}.log-line .m.in{color:var(--primary)}
+@keyframes log-in{from{opacity:0;transform:translateY(-2px)}to{opacity:1;transform:translateY(0)}}
+.log-line{animation:log-in 0.15s ease}
+.log-empty{text-align:center;color:var(--muted-foreground);padding:24px;font-size:13px}
+
+/* ===== Toast ===== */
+.toast-wrap{position:fixed;top:68px;right:20px;z-index:100;display:flex;flex-direction:column;gap:6px;width:280px}
+.toast{
+  padding:10px 14px;border-radius:calc(var(--radius) - 2px);
+  font-size:13px;font-weight:500;border:1px solid;
+  animation:toast-in 0.3s cubic-bezier(0.34,1.56,0.64,1);
+  transition:all 0.3s;
+}
+.toast.ok{background:oklch(0.97 0.03 155);color:oklch(0.4 0.14 155);border-color:oklch(0.9 0.08 155)}
+.toast.er{background:oklch(0.97 0.02 25);color:oklch(0.5 0.18 25);border-color:oklch(0.9 0.06 25);animation:toast-in 0.3s cubic-bezier(0.34,1.56,0.64,1),shake 0.4s ease 0.3s}
+.toast.in{background:var(--muted);color:var(--muted-foreground);border-color:var(--border)}
+@keyframes toast-in{from{opacity:0;transform:translateX(20px) scale(0.95)}to{opacity:1;transform:translateX(0) scale(1)}}
+
+/* ===== Tip ===== */
+.tip{
+  margin-top:12px;padding:10px 14px;border-radius:calc(var(--radius) - 2px);
+  font-size:12px;color:var(--muted-foreground);line-height:1.5;
+  background:var(--muted);border:1px solid var(--border);
+}
+.tip code{font-size:11px;color:var(--primary);font-weight:500}
+
+/* ===== Footer ===== */
+.footer{
+  text-align:center;padding:20px;font-size:12px;color:var(--muted-foreground);
+  animation:fade-in 0.5s ease 0.5s backwards;
+}
+
+/* ===== Badge Transition ===== */
+.badge{transition:all 0.3s cubic-bezier(0.4,0,0.2,1)}
+.badge.on{animation:pop-in 0.3s ease}
+.badge.offline{animation:shake 0.3s ease}
+
+/* ===== Lock Status Text Transition ===== */
+.lock-status{transition:all 0.3s}
+.lock-time{transition:all 0.3s}
+
+/* ===== Config tab animation ===== */
+#tab-config .card{animation-delay:0.1s}
+#tab-logs .card{animation-delay:0.1s}
+
+/* ===== Scrollbar ===== */
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+::-webkit-scrollbar-thumb:hover{background:var(--muted-foreground)}
+
+/* ===== Selection ===== */
+::selection{background:oklch(0.45 0.18 265 / 0.15)}
+
+/* ===== History Table ===== */
+.history-table{width:100%;border-collapse:collapse;font-size:12px}
+.history-table th{
+  text-align:left;padding:8px 10px;font-weight:600;font-size:11px;
+  color:var(--muted-foreground);text-transform:uppercase;letter-spacing:0.5px;
+  border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--card);
+}
+.history-table td{
+  padding:6px 10px;border-bottom:1px solid var(--border);
+  color:var(--foreground);transition:background 0.15s;
+}
+.history-table tr:hover td{background:var(--muted)}
+.history-table tr{animation:fade-in-left 0.2s ease backwards}
+.history-table .val-true{color:oklch(0.45 0.14 155);font-weight:600}
+.history-table .val-false{color:var(--destructive);font-weight:600}
+.history-table .src-device{color:var(--primary)}
+.history-table .src-user{color:oklch(0.5 0.14 80)}
+
+/* ===== Realtime pulse ===== */
+@keyframes data-pulse{
+  0%{background:oklch(0.45 0.18 265 / 0.08)}
+  100%{background:transparent}
+}
+.realtime-new{animation:data-pulse 1s ease}
+
+/* ===== Mobile H5 ===== */
+@media(max-width:768px){
+  /* Header */
+  .header{
+    padding:0 12px;height:48px;
+    flex-wrap:wrap;
+  }
+  .header-l{gap:4px}
+  .header-title{font-size:13px}
+  .header-sep{display:none}
+  .header-sub{font-size:11px;display:none}
+  .badge{font-size:11px;padding:2px 8px}
+
+  /* Main */
+  .main{padding:12px}
+
+  /* Page Head */
+  .page-head h1{font-size:18px}
+  .page-head p{font-size:12px}
+
+  /* Tabs */
+  .tabs{
+    width:100%;overflow-x:auto;
+    -webkit-overflow-scrolling:touch;
+    scrollbar-width:none;
+  }
+  .tabs::-webkit-scrollbar{display:none}
+  .tab{
+    padding:5px 12px;font-size:12px;
+    flex-shrink:0;
+  }
+
+  /* Grid */
+  .grid-2{grid-template-columns:1fr}
+  .grid-3{grid-template-columns:1fr}
+  .grid-4{grid-template-columns:repeat(2,1fr);gap:8px}
+
+  /* Card */
+  .card-header{padding:12px 14px}
+  .card-header h2{font-size:14px}
+  .card-body{padding:14px}
+
+  /* Stat Card */
+  .stat-card .stat-value{font-size:20px}
+
+  /* Lock */
+  .lock-display{flex-direction:column;text-align:center;gap:16px}
+  .lock-ring{width:72px;height:72px;font-size:28px}
+  .lock-status{font-size:18px}
+  .lock-btns{justify-content:center;flex-wrap:wrap}
+  .lock-btns .btn{flex:1;min-width:80px}
+
+  /* Buttons */
+  .btn{padding:6px 12px;font-size:12px}
+  .btn-sm{padding:4px 10px;font-size:11px}
+
+  /* Data List */
+  .data-row{
+    padding:8px 0;
+    flex-wrap:wrap;gap:6px;
+  }
+  .data-actions{
+    width:100%;justify-content:flex-end;gap:4px;
+  }
+
+  /* Recognition Grid */
+  .recog-grid{grid-template-columns:1fr 1fr;gap:8px}
+
+  /* Form */
+  .form-grid{grid-template-columns:1fr;gap:10px}
+  .form-group input{padding:8px 10px;font-size:14px}
+  .form-actions{flex-wrap:wrap}
+  .form-actions .btn{flex:1}
+
+  /* History */
+  .history-table{font-size:11px}
+  .history-table th,.history-table td{padding:5px 6px}
+
+  /* Log */
+  .log-box{max-height:200px;font-size:11px}
+
+  /* Toast */
+  .toast-wrap{
+    left:12px;right:12px;width:auto;
+    top:56px;
+  }
+
+  /* Footer */
+  .footer{font-size:11px;padding:12px}
+}
+
+/* ===== User Panel Overlay ===== */
+.user-panel-overlay{
+  display:none;position:fixed;inset:0;z-index:60;
+  background:oklch(0 0 0 / 0.4);backdrop-filter:blur(2px);
+  -webkit-backdrop-filter:blur(2px);
+  align-items:center;justify-content:center;
+  animation:fade-in 0.2s ease;
+}
+.user-panel-overlay.open{display:flex}
+.user-panel{
+  background:var(--card);border:1px solid var(--border);
+  border-radius:var(--radius);width:100%;max-width:440px;
+  max-height:80vh;display:flex;flex-direction:column;
+  animation:scale-in 0.25s cubic-bezier(0.34,1.2,0.64,1);
+  box-shadow:0 4px 24px oklch(0 0 0 / 0.12);
+}
+.user-panel-header{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:16px 20px;border-bottom:1px solid var(--border);flex-shrink:0;
+}
+.user-panel-header h3{font-size:15px;font-weight:600;letter-spacing:-0.3px}
+.user-panel-close{
+  width:28px;height:28px;border-radius:6px;border:none;
+  background:transparent;cursor:pointer;display:flex;
+  align-items:center;justify-content:center;
+  color:var(--muted-foreground);font-size:18px;transition:all 0.2s;
+}
+.user-panel-close:hover{background:var(--muted);color:var(--foreground)}
+.user-panel-body{padding:12px 20px;overflow-y:auto;flex:1}
+.user-panel-footer{
+  padding:12px 20px;border-top:1px solid var(--border);
+  flex-shrink:0;display:flex;justify-content:flex-end;
+}
+/* User row */
+.user-row{
+  display:flex;align-items:center;gap:10px;padding:10px 0;
+  border-bottom:1px solid var(--border);
+  animation:fade-in-left 0.25s ease backwards;
+}
+.user-row:last-child{border-bottom:none}
+.user-id-badge{
+  flex-shrink:0;width:36px;height:36px;border-radius:50%;
+  background:var(--primary);color:var(--primary-foreground);
+  display:flex;align-items:center;justify-content:center;
+  font-size:13px;font-weight:600;
+}
+.user-name-input{
+  flex:1;padding:6px 10px;border-radius:6px;font-size:13px;
+  border:1px solid var(--input);background:var(--card);
+  color:var(--foreground);outline:none;transition:border-color 0.2s;min-width:0;
+}
+.user-name-input:focus{border-color:var(--ring);box-shadow:0 0 0 2px oklch(0.45 0.18 265 / 0.1)}
+.user-name-input::placeholder{color:var(--muted-foreground)}
+.user-delete-btn{
+  flex-shrink:0;padding:5px 10px;border-radius:6px;border:1px solid var(--border);
+  background:var(--card);color:var(--destructive);font-size:12px;font-weight:500;
+  cursor:pointer;transition:all 0.2s;
+}
+.user-delete-btn:hover{background:var(--destructive);color:#fff;border-color:var(--destructive)}
+/* Stat card clickable */
+.stat-card.clickable{cursor:pointer}
+.stat-card.clickable:hover{box-shadow:0 1px 3px oklch(0 0 0 / 0.04),0 4px 12px oklch(0 0 0 / 0.03)}
+.stat-card.clickable:hover .stat-label{color:var(--primary)}
+/* Empty state */
+.user-panel-empty{text-align:center;color:var(--muted-foreground);padding:24px 0;font-size:13px}
+/* Mobile */
+@media(max-width:768px){
+  .user-panel{max-width:calc(100vw - 24px);max-height:85vh;margin:0 12px}
+  .user-panel-header{padding:12px 14px}
+  .user-panel-body{padding:8px 14px}
+  .user-panel-footer{padding:10px 14px}
+  .user-row{gap:8px;padding:8px 0}
+  .user-id-badge{width:32px;height:32px;font-size:12px}
+  .user-name-input{font-size:14px;padding:8px 10px}
+}
+
+/* Small phones */
+@media(max-width:380px){
+  .grid-4{grid-template-columns:1fr}
+  .recog-grid{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<div class="header">
+  <div class="header-l">
+    <span class="header-title">人脸识别智能锁</span>
+    <span class="header-sep"></span>
+    <span class="header-sub">OneNET Studio · 东华理工大学 邹宇航</span>
+  </div>
+  <div id="cb" class="badge off"><span class="badge-dot"></span><span id="ct">未连接</span></div>
+</div>
+
+<div class="toast-wrap" id="tw"></div>
+
+<div class="main">
+
+  <!-- Tabs -->
+  <div class="tabs" id="tabsContainer">
+    <div class="tab-indicator" id="tabIndicator"></div>
+    <button class="tab active" onclick="switchTab('overview',this)">概览</button>
+    <button class="tab" onclick="switchTab('config',this)">配置</button>
+    <button class="tab" onclick="switchTab('logs',this)">日志</button>
+    <button class="tab" onclick="switchTab('history',this)">历史数据</button>
+  </div>
+
+  <!-- Tab: Overview -->
+  <div id="tab-overview">
+
+    <!-- Stats -->
+    <div class="grid-4" style="margin-bottom:16px">
+      <div class="card stat-card">
+        <div class="card-body">
+          <div class="stat-header">
+            <span class="stat-label">锁状态</span>
+            <svg class="stat-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+          </div>
+          <div class="stat-value" id="stat-lock">--</div>
+        </div>
+      </div>
+      <div class="card stat-card clickable" onclick="showUserPanel()" title="点击查看用户列表">
+        <div class="card-body">
+          <div class="stat-header">
+            <span class="stat-label">用户数量</span>
+            <svg class="stat-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+          </div>
+          <div class="stat-value" id="stat-users">--</div>
+        </div>
+      </div>
+      <div class="card stat-card">
+        <div class="card-body">
+          <div class="stat-header">
+            <span class="stat-label">报警状态</span>
+            <svg class="stat-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
+          </div>
+          <div class="stat-value" id="stat-alarm">--</div>
+        </div>
+      </div>
+      <div class="card stat-card">
+        <div class="card-body">
+          <div class="stat-header">
+            <span class="stat-label">设备状态</span>
+            <svg class="stat-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="3" rx="2"/><line x1="8" x2="16" y1="21" y2="21"/><line x1="12" x2="12" y1="17" y2="21"/></svg>
+          </div>
+          <div class="stat-value" id="stat-device">--</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid-2">
+      <!-- Lock Control -->
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <h2>锁控制</h2>
+            <p>远程控制门锁开关</p>
+          </div>
+          <button class="btn btn-sm" onclick="ref()">刷新</button>
+        </div>
+        <div class="card-body">
+          <div class="lock-display">
+            <div class="lock-ring" id="lockRing">--</div>
+            <div class="lock-info">
+              <div class="lock-status" id="lockStatus">等待连接</div>
+              <div class="lock-time" id="lockTime">连接设备后显示状态</div>
+              <div class="lock-btns">
+                <button class="btn btn-destructive" onclick="snd('LOCK',false)" disabled id="btn-LOCK-on">上锁</button>
+                <button class="btn btn-success" onclick="snd('LOCK',true)" disabled id="btn-LOCK-off">解锁</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Device Controls -->
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <h2>设备功能</h2>
+            <p>人脸识别与用户管理</p>
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="data-list">
+            <div class="data-row">
+              <span class="data-label">人脸识别</span>
+              <div class="data-actions">
+                <button class="btn btn-primary btn-sm" onclick="act('OPEN_JC')" disabled id="btn-OPEN_JC">开启识别</button>
+              </div>
+            </div>
+            <div class="data-row">
+              <span class="data-label">人脸录入</span>
+              <div class="data-actions">
+                <button class="btn btn-primary btn-sm" onclick="act('OPEN_LR')" disabled id="btn-OPEN_LR">开始录入</button>
+              </div>
+            </div>
+            <div class="data-row">
+              <span class="data-label">远程报警</span>
+              <div class="data-actions">
+                <span class="data-value off" id="val-YC_BJ">--</span>
+                <button class="btn btn-destructive btn-sm" onclick="snd('YC_BJ',true)" disabled id="btn-YC_BJ-on">触发</button>
+                <button class="btn btn-sm" onclick="snd('YC_BJ',false)" disabled id="btn-YC_BJ-off">解除</button>
+              </div>
+            </div>
+            <div class="data-row">
+              <span class="data-label">清除用户</span>
+              <div class="data-actions">
+                <button class="btn btn-destructive btn-sm" onclick="act('Clear_user')" disabled id="btn-Clear_user">清除全部</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Recognition Log -->
+    <div class="card" style="margin-top:16px">
+      <div class="card-header">
+        <div>
+          <h2>识别记录</h2>
+          <p>最近一次人脸识别结果</p>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="recog-grid">
+          <div class="recog-item fail">
+            <div class="recog-label">最近识别失败</div>
+            <div class="recog-time" id="fail-time">--</div>
+          </div>
+          <div class="recog-item success">
+            <div class="recog-label">最近识别成功</div>
+            <div class="recog-time" id="success-time">--</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tab: Config -->
+
+  <!-- Tab: History -->
+  <div id="tab-history" style="display:none">
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <h2>属性变更历史</h2>
+            <p>设备上报的所有属性变化记录</p>
+          </div>
+          <button class="btn btn-sm" onclick="loadHistory()">刷新</button>
+        </div>
+        <div class="card-body">
+          <div style="max-height:400px;overflow-y:auto" id="historyProps">
+            <div class="log-empty">暂无数据</div>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <h2>操作日志历史</h2>
+            <p>所有控制指令的发送记录</p>
+          </div>
+        </div>
+        <div class="card-body">
+          <div style="max-height:400px;overflow-y:auto" id="historyLogs">
+            <div class="log-empty">暂无数据</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- 实时数据流 -->
+    <div class="card" style="margin-top:16px">
+      <div class="card-header">
+        <div>
+          <h2>实时数据流</h2>
+          <p>设备上报的实时属性数据（WebSocket 推送）</p>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <span class="badge ld" id="wsBadge"><span class="badge-dot"></span><span id="wsStatus">未连接</span></span>
+          <button class="btn btn-sm" onclick="clearRealtime()">清除</button>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="log-box" id="realtimeBox" style="max-height:300px"><div class="log-empty">等待数据...</div></div>
+      </div>
+    </div>
+  </div>
+  <div id="tab-config" style="display:none">
+    <div class="card">
+      <div class="card-header">
+        <div>
+          <h2>连接配置</h2>
+          <p>配置 OneNET 云平台连接参数</p>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="form-grid">
+          <div class="form-group full">
+            <label>Access Token</label>
+            <input type="text" id="at" placeholder="在 OneNET 控制台获取">
+          </div>
+          <div class="form-group">
+            <label>Product ID</label>
+            <input type="text" id="pid" placeholder="产品标识">
+          </div>
+          <div class="form-group">
+            <label>Device Name</label>
+            <input type="text" id="dn" placeholder="设备名称">
+          </div>
+        </div>
+        <div class="form-actions">
+          <button class="btn" onclick="clr()">清除配置</button>
+          <button class="btn btn-primary" id="bcn" onclick="conn()">连接设备</button>
+        </div>
+        <div class="tip">需先运行代理服务：<code>node proxy-server.js</code></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tab: Logs -->
+  <div id="tab-logs" style="display:none">
+    <div class="card">
+      <div class="card-header">
+        <div>
+          <h2>操作日志</h2>
+          <p>设备通信记录</p>
+        </div>
+        <button class="btn btn-sm" onclick="clog()">清除</button>
+      </div>
+      <div class="card-body">
+        <div class="log-box" id="lb"><div class="log-empty">暂无记录</div></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div class="footer">人脸识别智能锁 · OneNET Studio · 东华理工大学 邹宇航 · 实时MQTT + WebSocket + SQLite</div>
+
+<script>
+const API='https://iot-api.heclouds.com',PX='/rlsb/api/onenet',PX2='/rlsb/api',SK='onenet_lock_cfg',SK2='onenet_state';
+const WS_URL=(location.protocol==='https:'?'wss://':'ws://')+location.host+'/rlsb/ws';
+const PROPS={LOCK:{type:'bool',label:'锁'},OPEN_JC:{type:'bool',label:'人脸识别'},OPEN_LR:{type:'bool',label:'人脸录入'},Clear_user:{type:'bool',label:'清除用户'},USER_NUM:{type:'int',label:'用户数量'},YC_BJ:{type:'bool',label:'远程报警'},EERNUM:{type:'bool',label:'警报'},arr_id:{type:'array',label:'用户ID列表'}};
+let cfg={accessToken:'',productId:'',deviceName:''},conned=false,state={},userNames={};
+let ws=null,wsConnected=false,pollTimer=null;
+
+// 持久化属性变更和操作日志到服务端
+function logHistory(props, ops) {
+  const body = {};
+  if (props && props.length > 0) body.properties = props;
+  if (ops && ops.length > 0) body.operations = ops;
+  if (!body.properties && !body.operations) return;
+  fetch(PX2 + '/log', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  }).catch(() => {}); // 静默失败，不影响主流程
+}
+document.addEventListener('DOMContentLoaded',()=>{ld();connectWS()});
+function $i(id){return document.getElementById(id)}
+
+// Button hover glow tracking
+document.addEventListener('mousemove',e=>{
+  document.querySelectorAll('.btn').forEach(btn=>{
+    const r=btn.getBoundingClientRect();
+    btn.style.setProperty('--x',((e.clientX-r.left)/r.width*100)+'%');
+    btn.style.setProperty('--y',((e.clientY-r.top)/r.height*100)+'%');
+  });
+});
+
+// Tab switching with sliding indicator
+function moveIndicator(btn){
+  const container=$i('tabsContainer');
+  const indicator=$i('tabIndicator');
+  const containerRect=container.getBoundingClientRect();
+  const btnRect=btn.getBoundingClientRect();
+  indicator.style.left=(btnRect.left-containerRect.left)+'px';
+  indicator.style.width=btnRect.width+'px';
+}
+
+function switchTab(name,btn){
+  const tabs=['overview','config','logs','history'];
+  tabs.forEach(t=>{
+    const el=$i('tab-'+t);
+    if(t===name){
+      el.style.display='';
+      el.style.animation='fade-in-up 0.3s ease';
+    }else{
+      el.style.display='none';
+    }
+  });
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  btn.classList.add('active');
+  moveIndicator(btn);
+  if(name==='history')loadHistory();
+}
+
+window.addEventListener('load',()=>{const a=document.querySelector('.tab.active');if(a)moveIndicator(a);});
+window.addEventListener('resize',()=>{const a=document.querySelector('.tab.active');if(a)moveIndicator(a);});
+
+// ========== WebSocket ==========
+function connectWS(){
+  if(ws&&wsConnected)return;
+  ws=new WebSocket(WS_URL);
+  ws.onopen=()=>{
+    wsConnected=true;
+    $i('wsBadge').className='badge on';
+    $i('wsStatus').textContent='已连接';
+    lg('WebSocket 已连接','ok');
+  };
+  ws.onmessage=(e)=>{
+    try{handleWS(JSON.parse(e.data))}catch(err){console.error('WS parse error',err)}
+  };
+  ws.onclose=()=>{
+    wsConnected=false;
+    $i('wsBadge').className='badge off';
+    $i('wsStatus').textContent='已断开';
+    setTimeout(connectWS,3000);
+  };
+  ws.onerror=()=>{ws.close()};
+}
+
+function handleWS(msg){
+  switch(msg.type){
+    case 'mqtt_status':
+      // MQTT 状态只更新 UI 提示，不影响 conned（轮询兜底）
+      if(msg.connected){
+        lg('MQTT 实时推送已连接','ok');
+      }else{
+        lg('MQTT 断开，使用轮询模式','in');
+      }
+      break;
+    case 'property_update':
+      updatePropUI(msg.identifier,msg.value,msg.time);
+      addRealtime(msg);
+      break;
+    case 'set_reply':
+      if(msg.success)lg('指令执行成功','ok');
+      else lg(`指令失败: code=${msg.code}`,'er');
+      break;
+    case 'connect_result':
+      if(msg.success){lg('MQTT 连接成功','ok');ts('连接成功','ok')}
+      else{lg(`连接失败: ${msg.message}`,'er');ts('连接失败','er')}
+      break;
+    case 'history':
+      renderHistory(msg);
+      break;
+    case 'error':
+      lg(`错误: ${msg.message}`,'er');
+      break;
+  }
+}
+
+function wsSend(data){
+  if(ws&&wsConnected)ws.send(JSON.stringify(data));
+}
+
+// ========== 实时数据流 ==========
+function addRealtime(msg){
+  const box=$i('realtimeBox');
+  if(box.querySelector('.log-empty'))box.innerHTML='';
+  const now=new Date().toLocaleTimeString('zh-CN');
+  const el=document.createElement('div');
+  el.className='log-line realtime-new';
+  const valClass=msg.value===true||msg.value==='true'?'val-true':msg.value===false||msg.value==='false'?'val-false':'';
+  el.innerHTML=`<span class="t">${now}</span><span class="m"><b>${msg.identifier}</b> = <span class="${valClass}">${msg.value}</span> <span style="opacity:0.4">[${msg.source}]</span></span>`;
+  box.insertBefore(el,box.firstChild);
+  while(box.children.length>100)box.removeChild(box.lastChild);
+}
+function clearRealtime(){$i('realtimeBox').innerHTML='<div class="log-empty">等待数据...</div>'}
+
+// ========== 历史数据 ==========
+function loadHistory(){
+  if(wsConnected){
+    wsSend({type:'get_history',limit:100});
+  }else{
+    fetch(PX2+'/history?limit=100').then(r=>r.json()).then(renderHistory).catch(e=>lg(`加载历史失败: ${e.message}`,'er'));
+  }
+}
+
+function renderHistory(data){
+  // 属性历史
+  const propBox=$i('historyProps');
+  if(data.properties&&data.properties.length>0){
+    let html='<table class="history-table"><thead><tr><th>时间</th><th>属性</th><th>值</th><th>来源</th></tr></thead><tbody>';
+    data.properties.forEach(p=>{
+      const valClass=p.value==='true'?'val-true':p.value==='false'?'val-false':'';
+      const srcClass=p.source==='device'?'src-device':'src-user';
+      const time=new Date(p.timestamp).toLocaleString('zh-CN');
+      html+=`<tr><td style="white-space:nowrap">${time}</td><td>${p.identifier}</td><td class="${valClass}">${p.value}</td><td class="${srcClass}">${p.source==='device'?'设备上报':'用户控制'}</td></tr>`;
+    });
+    html+='</tbody></table>';
+    propBox.innerHTML=html;
+  }
+  // 操作日志
+  const logBox=$i('historyLogs');
+  if(data.logs&&data.logs.length>0){
+    let html='<table class="history-table"><thead><tr><th>时间</th><th>操作</th><th>详情</th><th>结果</th></tr></thead><tbody>';
+    data.logs.forEach(l=>{
+      const time=new Date(l.timestamp).toLocaleString('zh-CN');
+      const resultClass=l.result==='success'?'val-true':'val-false';
+      html+=`<tr><td style="white-space:nowrap">${time}</td><td>${l.action}</td><td>${l.detail||'--'}</td><td class="${resultClass}">${l.result}</td></tr>`;
+    });
+    html+='</tbody></table>';
+    logBox.innerHTML=html;
+  }
+}
+
+function loadUserNames(){
+  try{const d=localStorage.getItem('onenet_user_names');if(d)userNames=JSON.parse(d);}catch(e){userNames={};}
+}
+function saveUserNames(){localStorage.setItem('onenet_user_names',JSON.stringify(userNames));}
+
+function ld(){
+  loadUserNames();
+  // 默认配置
+  const DEFAULT_CFG={
+    accessToken:'version=2018-10-31&res=products%2Fu9gXgMhYR1%2Fdevices%2Fonenet_one&et=1812503220&method=md5&sign=ARYnb3UiXlTGHWqufrpm6A%3D%3D',
+    productId:'u9gXgMhYR1',
+    deviceName:'onenet_one'
+  };
+  const s=localStorage.getItem(SK);
+  if(s){try{const d=JSON.parse(s);cfg={...cfg,...d}}catch(e){}}
+  // 如果没有保存的配置，使用默认值
+  if(!cfg.accessToken){cfg={...cfg,...DEFAULT_CFG}}
+  $i('at').value=cfg.accessToken||'';
+  $i('pid').value=cfg.productId||'';
+  $i('dn').value=cfg.deviceName||'';
+  if(cfg.accessToken)lg('已加载配置','in');
+  const ls=localStorage.getItem(SK2);
+  if(ls){try{state=JSON.parse(ls);Object.keys(state).forEach(k=>updatePropUI(k,state[k]))}catch(e){}}
+}
+function sv(){cfg.accessToken=$i('at').value.trim();cfg.productId=$i('pid').value.trim();cfg.deviceName=$i('dn').value.trim();localStorage.setItem(SK,JSON.stringify(cfg))}
+function clr(){
+  localStorage.removeItem(SK);localStorage.removeItem(SK2);localStorage.removeItem('onenet_user_names');userNames={};
+  ['at','pid','dn'].forEach(id=>$i(id).value='');conned=false;stopPoll();cui(false);state={};
+  $i('lockRing').textContent='--';$i('lockRing').className='lock-ring';
+  $i('lockStatus').textContent='等待连接';$i('lockStatus').className='lock-status';
+  $i('lockTime').textContent='连接设备后显示状态';
+  $i('stat-lock').textContent='--';$i('stat-users').textContent='--';
+  $i('stat-alarm').textContent='--';$i('stat-device').textContent='--';
+  $i('val-YC_BJ').textContent='--';$i('val-YC_BJ').className='data-value off';
+  lg('配置已清除','in');ts('配置已清除','in');
+}
+
+async function rq(method,path,body){
+  if(!cfg.accessToken)throw new Error('请先配置 Token');
+  const url=`${API}${path}`,opts={method,headers:{Authorization:cfg.accessToken,'Content-Type':'application/json'}};
+  if(body)opts.body=JSON.stringify(body);
+  const r=await fetch(`${PX}?url=${encodeURIComponent(url)}`,opts);
+  if(!r.ok)throw new Error(`HTTP ${r.status}`);return r.json();
+}
+
+async function conn(){
+  sv();if(!cfg.accessToken){ts('请输入 Token','er');return}
+  if(!cfg.productId||!cfg.deviceName){ts('请输入 Product ID 和 Device Name','er');return}
+  const b=$i('bcn');b.disabled=true;b.textContent='连接中...';cui('ld');lg('连接中...','in');
+
+  // 确保 WebSocket 连接
+  if(!wsConnected)connectWS();
+
+  try{
+    // 1. 通过 HTTP API 查设备详情（和之前一样）
+    const st=await rq('GET',`/device/detail?product_id=${cfg.productId}&device_name=${cfg.deviceName}`);
+    if(st.code===10403)throw new Error('Token 无效');
+    const isOnline=st.data&&st.data.status===1;
+
+    // 2. 查询所有属性
+    const d=await rq('GET',`/thingmodel/query-device-property?product_id=${cfg.productId}&device_name=${cfg.deviceName}`);
+    conned=true;
+    if(isOnline){cui(true);$i('stat-device').textContent='在线';lg('设备在线','ok');ts('设备在线','ok')}
+    else{cui('offline');$i('stat-device').textContent='离线';lg('设备离线','er');ts('设备离线','er')}
+    parseProps(d);enableBtns(true);
+
+    // 3. 启动轮询
+    startPoll();
+    // 4. 尝试连接 MQTT（用于 arr_id 下发）
+    setTimeout(()=>{
+      wsSend({type:'connect',productId:cfg.productId,deviceName:cfg.deviceName,token:cfg.accessToken});
+    },1000);
+  }catch(e){
+    conned=false;cui(false);
+    lg(`失败: ${e.message}`,'er');ts('连接失败','er');
+  }finally{
+    b.disabled=false;b.textContent='连接设备';
+  }
+}
+
+function parseProps(d){
+  try{
+    if(!d.data)return;const list=Array.isArray(d.data)?d.data:d.data.list||[];
+    const changedProps = [];
+    list.forEach(item=>{
+      if(PROPS[item.identifier]){
+        let v=item.value;
+        if(item.data_type==='bool')v=(v==='true'||v===true);
+        else if(item.data_type==='int'||item.data_type==='float')v=Number(v);
+        else if(item.data_type==='array'){try{v=typeof v==='string'?JSON.parse(v):v;if(!Array.isArray(v))v=[];}catch(e){v=[];}}
+        // 检测变化并记录（数组用 JSON 比较）
+        const oldVal = state[item.identifier];
+        const isChanged = oldVal !== undefined && (
+          Array.isArray(v) ? JSON.stringify(oldVal)!==JSON.stringify(v) : oldVal !== v
+        );
+        if (isChanged) {
+          changedProps.push({identifier:item.identifier, value:Array.isArray(v)?JSON.stringify(v):v, dataType:item.data_type||typeof v, source:'device'});
+        }
+        state[item.identifier]=v;updatePropUI(item.identifier,v,item.time);
+      }
+    });saveState();
+    // 持久化设备上报的属性变化
+    if (changedProps.length > 0) logHistory(changedProps, null);
+  }catch(e){lg(`解析失败: ${e.message}`,'er')}
+}
+
+function updatePropUI(key,v,time){
+  if(key==='EERNUM'){
+    const t=time?new Date(time).toLocaleString('zh-CN'):new Date().toLocaleString('zh-CN');
+    // 只更新对应的时间，保留另一个
+    if(v===false||v==='false'){
+      $i('fail-time').textContent=t;
+      $i('stat-alarm').textContent='报警';
+    }else{
+      $i('success-time').textContent=t;
+      $i('stat-alarm').textContent='正常';
+    }
+    return;
+  }
+  if(key==='LOCK'){
+    const locked=(v===false||v==='false'),now=new Date().toLocaleTimeString('zh-CN');
+    const ring=$i('lockRing'),status=$i('lockStatus');
+    // Trigger re-animation by removing and re-adding class
+    ring.className='lock-ring';
+    void ring.offsetWidth; // force reflow
+    ring.textContent=locked?'🔒':'🔓';
+    ring.className=`lock-ring ${locked?'locked':'unlocked'}`;
+    status.textContent=locked?'已上锁':'已解锁';
+    status.className=`lock-status ${locked?'locked':'unlocked'}`;
+    $i('lockTime').textContent=now;
+    $i('stat-lock').textContent=locked?'已上锁':'已解锁';
+    // Animate stat value
+    const statEl=$i('stat-lock');
+    statEl.style.animation='none';
+    void statEl.offsetWidth;
+    statEl.style.animation='count-up 0.3s ease';
+    return;
+  }
+  if(key==='USER_NUM'){$i('stat-users').textContent=v;return}
+  if(key==='arr_id'){
+    const ids=Array.isArray(v)?v:[];
+    const panel=$i('user-panel-overlay');if(panel&&panel.style.display!=='none')renderUserList(ids);
+    return;
+  }
+  if(key==='YC_BJ'){
+    $i('val-YC_BJ').textContent=v?'报警中':'正常';
+    $i('val-YC_BJ').className=`data-value ${v?'on':'off'}`;return;
+  }
+}
+function saveState(){localStorage.setItem(SK2,JSON.stringify(state))}
+
+function snd(key,val){
+  if(!conned){ts('请先连接','er');return}
+  const a=PROPS[key].label;
+  state[key]=val;updatePropUI(key,val);saveState();
+  lg(`${a}: ${val?'开':'关'}`,'ok');
+  // 通过 HTTP API 发送（和之前一样可靠的方式）
+  const body={product_id:cfg.productId,device_name:cfg.deviceName,params:{[key]:val}};
+  rq('POST','/thingmodel/set-device-property',body).then(d=>{
+    lg(`返回: code=${d.code}`,'in');
+    // 持久化到服务端数据库
+    logHistory(
+      [{identifier:key,value:val,dataType:PROPS[key].type,source:'user'}],
+      [{action:'set_property',detail:`${key}=${val}`,result:'success'}]
+    );
+    // 同时通知 WebSocket 服务端记录
+    wsSend({type:'set_property',identifier:key,value:val});
+  }).catch(e=>{
+    lg(`${a}失败: ${e.message}`,'er');
+    // 失败也记录日志
+    logHistory(null, [{action:'set_property',detail:`${key}=${val}`,result:'failed'}]);
+  });
+}
+
+const ACT={OPEN_JC:{text:'开启识别',loading:'识别中...'},OPEN_LR:{text:'开始录入',loading:'录入中...'},Clear_user:{text:'清除用户',loading:'清除中...'}};
+function act(key){
+  if(!conned){ts('请先连接','er');return}
+  const btn=$i(`btn-${key}`),a=ACT[key];btn.disabled=true;btn.textContent=a.loading;lg(a.text,'ok');
+  // 通过 HTTP API 发送
+  const body={product_id:cfg.productId,device_name:cfg.deviceName,params:{[key]:true}};
+  rq('POST','/thingmodel/set-device-property',body).then(d=>{
+    lg(`返回: code=${d.code}`,'in');
+    // 持久化到服务端数据库
+    logHistory(
+      [{identifier:key,value:true,dataType:'bool',source:'user'}],
+      [{action:'set_property',detail:`${key}=true`,result:'success'}]
+    );
+    wsSend({type:'set_property',identifier:key,value:true});
+    // 清除用户时同步清空 arr_id 数组和用户名
+    if(key==='Clear_user'){
+      userNames={};saveUserNames();
+      sndArrId([]);
+    }
+  }).catch(e=>{
+    lg(`${a.text}失败: ${e.message}`,'er');
+    logHistory(null, [{action:'set_property',detail:`${key}=true`,result:'failed'}]);
+  }).finally(()=>{
+    btn.disabled=false;btn.textContent=a.text;
+  });
+}
+
+// 同步 arr_id 数组到云平台
+function sndArrId(newArr){
+  if(!conned){ts('请先连接','er');return}
+  const key='arr_id';
+  state[key]=newArr;updatePropUI(key,newArr);saveState();
+  const body={product_id:cfg.productId,device_name:cfg.deviceName,params:{[key]:newArr}};
+  lg(`上报 arr_id: ${JSON.stringify(newArr)}`,'in');
+  rq('POST','/thingmodel/set-device-property',body).then(d=>{
+    // 0=成功, 10411=设备响应超时但指令已到平台
+    if(d.code===0||d.code===10411){
+      lg(`arr_id 已上报: [${newArr.join(',')}] ${d.code===10411?'(设备未确认)':''}`,'ok');
+      logHistory(
+        [{identifier:key,value:JSON.stringify(newArr),dataType:'array',source:'user'}],
+        [{action:'set_property',detail:`arr_id=${JSON.stringify(newArr)}`,result:'success'}]
+      );
+    }else{
+      lg(`arr_id 上报失败: code=${d.code} ${d.msg||''}`,'er');
+      logHistory(null,[{action:'set_property',detail:`arr_id=${JSON.stringify(newArr)}`,result:`failed:${d.code}`}]);
+    }
+    wsSend({type:'set_property',identifier:key,value:newArr});
+  }).catch(e=>{
+    lg(`更新用户列表失败: ${e.message}`,'er');
+    logHistory(null,[{action:'set_property',detail:`arr_id=${JSON.stringify(newArr)}`,result:'failed'}]);
+  });
+}
+
+async function ref(){
+  if(!conned)return;
+  try{
+    const st=await rq('GET',`/device/detail?product_id=${cfg.productId}&device_name=${cfg.deviceName}`);
+    if(st.code===0&&st.data){cui(st.data.status===1?true:'offline');$i('stat-device').textContent=st.data.status===1?'在线':'离线'}
+    const d=await rq('GET',`/thingmodel/query-device-property?product_id=${cfg.productId}&device_name=${cfg.deviceName}`);
+    parseProps(d);
+  }catch(e){lg(`刷新失败: ${e.message}`,'er')}
+}
+
+function enableBtns(on){document.querySelectorAll('button[id^="btn-"]').forEach(b=>b.disabled=!on)}
+
+// 轮询（MQTT 实时推送的兜底方案）
+function startPoll(){
+  if(pollTimer)return;
+  pollTimer=setInterval(()=>{
+    if(conned){
+      rq('GET',`/thingmodel/query-device-property?product_id=${cfg.productId}&device_name=${cfg.deviceName}`)
+        .then(d=>{
+          parseProps(d);
+          // 同时更新实时数据流面板
+          if(d.data){
+            const list=Array.isArray(d.data)?d.data:d.data.list||[];
+            list.forEach(item=>{
+              if(PROPS[item.identifier]){
+                let v=item.value;
+                if(item.data_type==='bool')v=(v==='true'||v===true);
+                addRealtime({identifier:item.identifier,value:v,time:Date.now(),source:'poll'});
+              }
+            });
+          }
+        })
+        .catch(e=>{});
+    }
+  },3000);
+}
+function stopPoll(){if(pollTimer){clearInterval(pollTimer);pollTimer=null}}
+function cui(s){const b=$i('cb'),t=$i('ct');if(s===true){b.className='badge on';t.textContent='在线'}else if(s==='offline'){b.className='badge offline';t.textContent='离线'}else if(s==='ld'){b.className='badge ld';t.textContent='连接中'}else{b.className='badge off';t.textContent='未连接'}}
+
+function lg(m,tp){const box=$i('lb');if(box.querySelector('.log-empty'))box.innerHTML='';const t=new Date().toLocaleTimeString('zh-CN');const el=document.createElement('div');el.className='log-line';el.innerHTML=`<span class="t">${t}</span><span class="m ${tp||''}">${m}</span>`;box.insertBefore(el,box.firstChild);while(box.children.length>50)box.removeChild(box.lastChild)}
+function clog(){$i('lb').innerHTML='<div class="log-empty">暂无记录</div>'}
+function ts(m,tp){const w=$i('tw'),el=document.createElement('div');el.className=`toast ${tp||'in'}`;el.textContent=m;w.appendChild(el);setTimeout(()=>{el.style.opacity='0';el.style.transition='opacity .3s';setTimeout(()=>el.remove(),300)},3000)}
+
+// ========== 用户管理面板 ==========
+function showUserPanel(){
+  const ids=Array.isArray(state['arr_id'])?state['arr_id']:[];
+  renderUserList(ids);
+  $i('user-panel-overlay').style.display='flex';
+}
+function hideUserPanel(){$i('user-panel-overlay').style.display='none'}
+function renderUserList(ids){
+  const body=$i('user-panel-body');
+  if(!ids||ids.length===0){body.innerHTML='<div class="user-panel-empty">暂无用户</div>';return}
+  let html='';
+  ids.forEach((id,idx)=>{
+    const name=userNames[String(id)]||'';
+    var escapedName=String(name).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\"/g,'&quot;');
+    html+='<div class=\"user-row\" style=\"animation-delay:'+(idx*0.04)+'s\"><div class=\"user-id-badge\">'+id+'</div><input class=\"user-name-input\" placeholder=\"输入用户名\" value=\"'+escapedName+'\" onchange=\"saveUserName('+id+',this.value)\" onblur=\"saveUserName('+id+',this.value)\"><button class=\"user-delete-btn\" onclick=\"deleteUser('+id+')\">删除</button></div>';
+  });
+  body.innerHTML=html;
+}
+function saveUserName(id,name){
+  id=String(id);
+  if(name.trim())userNames[id]=name.trim();
+  else delete userNames[id];
+  saveUserNames();
+}
+function deleteUser(id){
+  if(!confirm(`确定删除用户 ${id}？将从设备和云平台移除。`))return;
+  const arr=Array.isArray(state['arr_id'])?[...state['arr_id']]:[];
+  const newArr=arr.filter(v=>v!==id);
+  delete userNames[String(id)];saveUserNames();
+  sndArrId(newArr);
+}
+// Escape 关闭面板
+document.addEventListener('keydown',function(e){if(e.key==='Escape')hideUserPanel()});
+</script>
+<!-- 用户管理面板 -->
+<div class="user-panel-overlay" id="user-panel-overlay" onclick="if(event.target===this)hideUserPanel()">
+  <div class="user-panel">
+    <div class="user-panel-header">
+      <h3>用户管理</h3>
+      <button class="user-panel-close" onclick="hideUserPanel()">&times;</button>
+    </div>
+    <div class="user-panel-body" id="user-panel-body">
+      <div class="user-panel-empty">暂无用户</div>
+    </div>
+    <div class="user-panel-footer">
+      <button class="btn btn-sm" onclick="hideUserPanel()">关闭</button>
+    </div>
+  </div>
+</div>
+</body>
+</html>
