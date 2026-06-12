@@ -224,7 +224,7 @@ uint8_t OneNet_ReportUserNum(uint8_t num)
 }
 
 /* ============ 检查云平台下发指令 ============ */
-// 返回值: -1=无指令, 0=关锁, 1=开锁, 2=人脸验证, 3=人脸录入, 4=清除用户
+// 返回值: -1=无指令, 0=关锁, 1=开锁, 2=人脸验证, 3=人脸录入, 4=清除用户, 5=远程报警, 6=arr_id清空
 int8_t OneNet_CheckCommand(char *cmd_id)
 {
   // ESP8266 收到 MQTT 消息格式: +MQTTSUBRECV:0,"topic",len,payload
@@ -296,6 +296,20 @@ int8_t OneNet_CheckCommand(char *cmd_id)
     }
   }
 
+  // 检查 arr_id 指令（云平台下发用户数组）
+  if (strstr(payload, "arr_id") != NULL)
+  {
+    /* arr_id = [] 表示清空用户 */
+    if (strstr(payload, "[]") != NULL)
+    {
+      ClearRxBuf();
+      return 6;  // 删除全部用户
+    }
+    /* arr_id 有值则忽略（设备端管理） */
+    ClearRxBuf();
+    return -1;
+  }
+
   // 检查 LOCK 指令
   if (strstr(payload, "LOCK") != NULL)
   {
@@ -322,4 +336,25 @@ uint8_t OneNet_SendSetReply(const char *cmd_id)
   sprintf(cmd, "AT+MQTTPUB=0,\"$sys/u9gXgMhYR1/onenet_one/thing/property/set_reply\",\"{\\\"id\\\":\\\"%s\\\"\\,\\\"code\\\":200\\,\\\"msg\\\":\\\"success\\\"}\",0,0",
     cmd_id);
   return ESP8266_SendCmd(cmd, "OK", 5000);
+}
+
+/* ============ 上报用户ID数组 (arr_id) ============ */
+uint8_t OneNet_ReportUserIDArray(uint16_t *ids, uint8_t count)
+{
+  char val[256];
+  int p = 0;
+  if (count == 0) {
+    p += sprintf(val + p, "");
+  } else {
+    for (uint8_t i = 0; i < count; i++) {
+      p += sprintf(val + p, "%d", ids[i]);
+      if (i < count - 1) p += sprintf(val + p, ",");
+    }
+  }
+
+  char cmd[768];
+  sprintf(cmd, "AT+MQTTPUB=0,\"$sys/u9gXgMhYR1/onenet_one/thing/property/post\","
+    "\"{\\\"id\\\":\\\"123\\\"\\,\\\"version\\\":\\\"1.0\\\"\\,\\\"params\\\":"
+    "{\\\"arr_id\\\":{\\\"value\\\":\\\"%s\\\"}}}\",0,0", val);
+  return ESP8266_SendCmd(cmd, "OK", 8000);
 }

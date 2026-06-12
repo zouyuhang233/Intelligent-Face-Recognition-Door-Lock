@@ -31,5 +31,6 @@ uint8_t OneNet_ReportResult(uint8_t is_success);  // 上报识别结果 (EERNUM 
 uint8_t OneNet_ReportUserNum(uint8_t num);  // 上报用户数量 (USER_NUM)
 int8_t OneNet_CheckCommand(char *cmd_id);  // 检查云平台下发指令
 uint8_t OneNet_SendSetReply(const char *cmd_id);  // 回复 set_reply
+uint8_t OneNet_ReportUserIDArray(uint16_t *ids, uint8_t count);  // 上报 arr_id
 
 #endif

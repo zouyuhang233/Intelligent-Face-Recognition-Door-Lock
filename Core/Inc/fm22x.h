@@ -78,6 +78,8 @@ extern volatile bool module_ready;
 extern volatile bool command_complete;
 extern volatile uint8_t last_result;
 extern uint8_t fm22x_rx_byte;
+extern volatile uint16_t g_user_ids[50];
+extern volatile uint8_t  g_user_id_count;
 extern uint8_t lock_state;
 extern uint8_t beep_state;
 extern uint8_t lock_beep_state;

@@ -17,6 +17,7 @@
 #include "lcd.h"
 #include "fm22x.h"
 #include "esp8266.h"
+#include "ui.h"
 #include <stdio.h>
 #include <string.h>
 /* USER CODE END Includes */
@@ -75,12 +76,6 @@ void SystemClock_Config(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-static void lcd_line(uint16_t y, const char *text, uint16_t color)
-{
-    LCD_FillRect(10, y, 310, y + 20, WHITE);
-    LCD_ShowString(10, y, (char *)text, color, WHITE);
-}
-
 static void led_blink(uint8_t n, uint8_t fast) {
     uint32_t d = fast ? 100 : 200;
     for (uint8_t i = 0; i < n; i++) {
@@ -89,16 +84,20 @@ static void led_blink(uint8_t n, uint8_t fast) {
     }
 }
 
+static void update_status_bar(void) {
+    UI_UpdateStatus(lock_state, g_user_count);
+}
+
 /* 开锁 */
 static void do_unlock(void) {
     lock_state = 1;
     HAL_GPIO_WritePin(GPIOC, GPIO_PIN_3, GPIO_PIN_SET);
     HAL_GPIO_WritePin(GPIOE, GPIO_PIN_5, GPIO_PIN_RESET);
-    lcd_line(320, "Lock: OPEN ", GREEN);
-    lcd_line(340, "Cloud: OPEN ", GREEN);
+    update_status_bar();
+    UI_Log("Lock OPEN", UI_GREEN);
     if (mqtt_connected) {
         OneNet_ReportLock(1);
-        OneNet_ReportResult(1);  // 识别成功
+        OneNet_ReportResult(1);
     }
 }
 
@@ -107,8 +106,8 @@ static void do_lock(void) {
     lock_state = 0;
     HAL_GPIO_WritePin(GPIOC, GPIO_PIN_3, GPIO_PIN_RESET);
     HAL_GPIO_WritePin(GPIOE, GPIO_PIN_5, GPIO_PIN_SET);
-    lcd_line(320, "Lock: CLOSE", RED);
-    lcd_line(340, "Cloud: CLOSE", BLUE);
+    update_status_bar();
+    UI_Log("Lock CLOSE", UI_RED);
     if (mqtt_connected) OneNet_ReportLock(0);
 }
 
@@ -116,18 +115,19 @@ static void do_lock(void) {
 static void do_alarm(const char *reason) {
     alarm_state = 1;
     alarm_tick = HAL_GetTick();
-    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8, GPIO_PIN_SET);  // 蜂鸣器开
-    lcd_line(360, "ALARM! Stranger!", RED);
-    HAL_Delay(300);  // 响 300ms
-    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8, GPIO_PIN_RESET);  // 蜂鸣器关
+    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8, GPIO_PIN_SET);
+    UI_ShowAlarm(reason);
+    UI_Log("ALARM!", UI_RED);
+    HAL_Delay(300);
+    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8, GPIO_PIN_RESET);
     alarm_state = 0;
 }
 
 /* 停止告警 */
 static void stop_alarm(void) {
     alarm_state = 0;
-    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8, GPIO_PIN_RESET);  // 蜂鸣器关
-    LCD_FillRect(10, 360, 310, 380, WHITE);
+    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8, GPIO_PIN_RESET);
+    UI_ClearAlarm();
 }
 /* USER CODE END 0 */
 
@@ -154,27 +154,28 @@ int main(void)
   MX_FSMC_Init();
   /* USER CODE BEGIN 2 */
   LCD_Init();
-  LCD_Clear(WHITE);
-  LCD_ShowString(10, 5, "=== Face Recognition Test ===", BLUE, WHITE);
-
   HAL_GPIO_WritePin(LCD_BL_GPIO_Port, LCD_BL_Pin, GPIO_PIN_SET);
   HAL_GPIO_WritePin(GPIOC, GPIO_PIN_3, GPIO_PIN_RESET);
   HAL_GPIO_WritePin(GPIOE, GPIO_PIN_5, GPIO_PIN_SET);
-  HAL_Delay(500);
+  HAL_Delay(300);
+
+  /* 初始化 UI */
+  UI_Init();
+
   pa0_last = HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_0);
   pe3_last = HAL_GPIO_ReadPin(GPIOE, GPIO_PIN_3);
   pe2_last = HAL_GPIO_ReadPin(GPIOE, GPIO_PIN_2);
 
   /* 初始化摄像头 */
+  UI_Log("Init camera...", UI_GRAY);
   FM22x_Init();
   HAL_UART_Receive_IT(&huart2, &fm22x_rx_byte, 1);
-  lcd_line(30, "Waiting camera...", BLACK);
 
   {
       uint32_t t0 = HAL_GetTick();
       while ((HAL_GetTick() - t0) < 10000) {
           if (module_ready) {
-              lcd_line(30, "Camera READY!", GREEN);
+              UI_Log("Camera READY!", UI_GREEN);
               led_blink(2, 1);
               break;
           }
@@ -183,36 +184,36 @@ int main(void)
   }
 
   if (!module_ready) {
-      lcd_line(30, "Camera FAIL!", RED);
+      UI_Log("Camera FAIL!", UI_RED);
   }
 
-  /* 初始化 ESP8266 */
+  /* 初始化 ESP8266 + 连接 OneNet */
+  UI_Log("Init WiFi...", UI_GRAY);
   ESP8266_Init();
 
-  /* 连接 OneNet */
+  UI_Log("Connect MQTT...", UI_GRAY);
   if (OneNet_Connect()) {
       mqtt_connected = 1;
+      HAL_Delay(1000);
+      UI_Log("MQTT Connected!", UI_GREEN);
+  } else {
+      UI_Log("MQTT Failed!", UI_RED);
   }
 
-  lcd_line(240, "=== Controls ===", BLUE);
-  lcd_line(260, "PE3: Enroll", GRAY);
-  lcd_line(280, "PE2: Verify", GRAY);
-  lcd_line(300, "PA0: Delete All", GRAY);
-
-  /* 显示初始锁状态 */
-  lcd_line(320, "Lock: CLOSE", RED);
-  lcd_line(340, "Cloud: --", GRAY);
-
-  /* 获取已录入用户数量 */
+  /* 获取用户列表 */
   FM22x_GetAllUser();
   HAL_Delay(500);
-  {
-      char buf[32];
-      sprintf(buf, "Users: %d", g_user_count);
-      lcd_line(380, buf, WHITE);
-  }
+  update_status_bar();
 
+  /* 开机上报 arr_id */
   heartbeat_tick = HAL_GetTick();
+  if (mqtt_connected) {
+      if (OneNet_ReportUserIDArray((uint16_t*)g_user_ids, g_user_id_count)) {
+          UI_Log("arr_id synced", UI_GREEN);
+      } else {
+          UI_Log("arr_id fail!", UI_RED);
+      }
+  }
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -225,25 +226,9 @@ int main(void)
     /* ---- 人脸状态显示 ---- */
     if (g_face_updated) {
         g_face_updated = false;
-        char buf[60];
         int16_t yaw_deg = g_face_yaw / 10;
-
-        if (g_face_state == 0)
-            sprintf(buf, "Face: DETECTED");
-        else if (g_face_state == 1)
-            sprintf(buf, "Face: NO FACE");
-        else
-            sprintf(buf, "Face: state=%d", (int)g_face_state);
-        lcd_line(30, buf, (g_face_state == 0) ? GREEN : RED);
-
-        sprintf(buf, "Yaw:%+3d Box:(%d,%d,%d,%d)", yaw_deg,
-                g_face_left, g_face_top, g_face_right, g_face_bottom);
-        lcd_line(50, buf, BLACK);
-
-        if (enrolling) {
-            sprintf(buf, "Enrolling... #%lu", (unsigned long)g_face_count);
-            lcd_line(70, buf, CYAN);
-        }
+        UI_UpdateFace(g_face_state, yaw_deg,
+            g_face_left, g_face_top, g_face_right, g_face_bottom);
     }
 
     /* ---- 命令结果处理 ---- */
@@ -254,21 +239,17 @@ int main(void)
         if (enrolling) {
             enrolling = 0;
             if (r == 0) {
-                lcd_line(70, "Enroll OK!", GREEN);
+                UI_Log("Enroll SUCCESS!", UI_GREEN);
                 led_blink(3, 0);
                 enroll_ok_count++;
-                /* 更新用户数量 */
                 FM22x_GetAllUser();
                 HAL_Delay(300);
-                {
-                    char buf[32];
-                    sprintf(buf, "Users: %d", g_user_count);
-                    lcd_line(380, buf, WHITE);
-                }
+                update_status_bar();
+                if (mqtt_connected) OneNet_ReportUserIDArray((uint16_t*)g_user_ids, g_user_id_count);
             } else {
                 char b[40];
                 sprintf(b, "Enroll FAIL: %d", r);
-                lcd_line(70, b, RED);
+                UI_Log(b, UI_RED);
                 led_blink(1, 1);
                 enroll_fail_count++;
             }
@@ -276,18 +257,18 @@ int main(void)
         else if (verifying) {
             verifying = 0;
             if (r == 0) {
-                lcd_line(70, "Verify OK!", GREEN);
+                UI_Log("Verify SUCCESS!", UI_GREEN);
                 led_blink(3, 0);
                 verify_ok_count++;
-                do_unlock();  /* 开锁并上报 LOCK + EERNUM */
+                do_unlock();
             } else {
                 char b[40];
                 sprintf(b, "Verify FAIL: %d", r);
-                lcd_line(70, b, RED);
+                UI_Log(b, UI_RED);
                 led_blink(1, 1);
                 verify_fail_count++;
-                do_alarm("Stranger");
-                if (mqtt_connected) OneNet_ReportResult(0);  // 识别失败
+                do_alarm("Stranger!");
+                if (mqtt_connected) OneNet_ReportResult(0);
             }
         }
     }
@@ -303,49 +284,47 @@ int main(void)
         int8_t cloud_cmd = OneNet_CheckCommand(cmd_id);
 
         if (cloud_cmd == 0 && lock_state == 1) {
-            /* LOCK: false - 关锁 */
             do_lock();
             if (cmd_id[0]) OneNet_SendSetReply(cmd_id);
         } else if (cloud_cmd == 1 && lock_state == 0) {
-            /* LOCK: true - 开锁 */
             do_unlock();
             if (cmd_id[0]) OneNet_SendSetReply(cmd_id);
         } else if (cloud_cmd == 2) {
-            /* OPEN_JC: true - 人脸验证 */
-            lcd_line(70, "Cloud: Verify...", CYAN);
+            UI_Log("Cloud: Verify...", UI_CYAN);
             verifying = 1;
             FM22x_Verify(1, 10);
             if (cmd_id[0]) OneNet_SendSetReply(cmd_id);
         } else if (cloud_cmd == 3) {
-            /* OPEN_LR: true - 人脸录入 */
-            lcd_line(70, "Cloud: Enroll...", CYAN);
-            lcd_line(90, "Turn head U-D-L-R", WHITE);
+            UI_Log("Cloud: Enroll...", UI_CYAN);
             enrolling = 1;
             FM22x_Enroll(0, 0x1F, 30);
             if (cmd_id[0]) OneNet_SendSetReply(cmd_id);
         } else if (cloud_cmd == 4) {
-            /* Clear_user: true - 清除用户 */
-            lcd_line(70, "Cloud: Delete All", RED);
+            UI_Log("Cloud: Delete All", UI_RED);
             FM22x_DeleteAll();
             HAL_Delay(500);
             FM22x_GetAllUser();
             HAL_Delay(300);
-            {
-                char buf[32];
-                sprintf(buf, "Users: %d", g_user_count);
-                lcd_line(380, buf, WHITE);
-            }
+            update_status_bar();
+            if (mqtt_connected) OneNet_ReportUserIDArray((uint16_t*)g_user_ids, g_user_id_count);
+            if (cmd_id[0]) OneNet_SendSetReply(cmd_id);
+        } else if (cloud_cmd == 6) {
+            UI_Log("Cloud: arr_id clear", UI_RED);
+            FM22x_DeleteAll();
+            HAL_Delay(500);
+            FM22x_GetAllUser();
+            HAL_Delay(300);
+            update_status_bar();
+            if (mqtt_connected) OneNet_ReportUserIDArray((uint16_t*)g_user_ids, g_user_id_count);
             if (cmd_id[0]) OneNet_SendSetReply(cmd_id);
         } else if (cloud_cmd == 5) {
-            /* YC_BJ: true - 远程报警 */
-            lcd_line(70, "Cloud: ALARM!", RED);
+            UI_Log("Cloud: ALARM!", UI_RED);
             for (int i = 0; i < 3; i++) {
                 HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8, GPIO_PIN_SET);
                 HAL_Delay(500);
                 HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8, GPIO_PIN_RESET);
                 HAL_Delay(200);
             }
-            lcd_line(70, "", WHITE);
             if (cmd_id[0]) OneNet_SendSetReply(cmd_id);
         }
     }
@@ -370,31 +349,22 @@ int main(void)
         key_tick = HAL_GetTick();
 
         if (key == 1) {
-            /* PA0: 删除所有用户 */
-            lcd_line(70, "Deleting all...", RED);
+            UI_Log("Delete All Users...", UI_RED);
             FM22x_DeleteAll();
             HAL_Delay(500);
-            /* 更新用户数量 */
             FM22x_GetAllUser();
             HAL_Delay(300);
-            {
-                char buf[32];
-                sprintf(buf, "Users: %d", g_user_count);
-                lcd_line(380, buf, WHITE);
-            }
+            update_status_bar();
+            if (mqtt_connected) OneNet_ReportUserIDArray((uint16_t*)g_user_ids, g_user_id_count);
         }
         else if (key == 2) {
-            /* PE3: 交互式录入 */
             enrolling = 1;
-            lcd_line(70, "Enrolling...", BLUE);
-            lcd_line(90, "Turn head U-D-L-R", WHITE);
+            UI_Log("Enrolling...", UI_CYAN);
             FM22x_Enroll(0, 0x1F, 30);
         }
         else if (key == 3) {
-            /* PE2: 人脸验证 */
             verifying = 1;
-            lcd_line(70, "Verifying...", BLUE);
-            lcd_line(90, "Look at camera!", WHITE);
+            UI_Log("Verifying...", UI_CYAN);
             FM22x_Verify(1, 10);
         }
     }

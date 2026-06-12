@@ -166,6 +166,8 @@ volatile bool g_face_updated = false;
 volatile uint32_t g_face_count = 0;
 volatile uint16_t g_last_uid = 0;
 volatile uint8_t g_user_count = 0;
+volatile uint16_t g_user_ids[50] = {0};
+volatile uint8_t  g_user_id_count = 0;
 
 /* ============ 解析人脸状态 ============ */
 static void ParseFaceState(uint8_t* data, uint16_t size)
@@ -235,12 +237,36 @@ static void ProcessReceivedFrame(uint8_t msgid, uint16_t size, uint8_t* data)
                     && result == MR_SUCCESS && size >= 4)
                 {
                     g_last_uid = ((uint16_t)data[2] << 8) | data[3];
+                    if (cmd == MID_ENROLL || cmd == MID_ENROLL_SINGLE) {
+                        uint8_t found = 0;
+                        for (uint8_t i = 0; i < g_user_id_count; i++) {
+                            if (g_user_ids[i] == g_last_uid) { found = 1; break; }
+                        }
+                        if (!found && g_user_id_count < 50) {
+                            g_user_ids[g_user_id_count++] = g_last_uid;
+                        }
+                    }
                 }
 
-                /* 获取用户数量 */
+                /* 获取用户数量 + 列表 */
                 if(cmd == 0x24 && result == MR_SUCCESS && size >= 3)
                 {
                     g_user_count = data[2];
+                    if (size >= (uint16_t)(3 + g_user_count * 2)) {
+                        g_user_id_count = 0;
+                        for (uint8_t i = 0; i < g_user_count && i < 50; i++) {
+                            g_user_ids[i] = ((uint16_t)data[3 + i*2] << 8)
+                                          | data[4 + i*2];
+                            g_user_id_count++;
+                        }
+                    }
+                }
+
+                /* 删除全部：清空数组 */
+                if(cmd == MID_DELALL && result == MR_SUCCESS)
+                {
+                    g_user_id_count = 0;
+                    memset((void*)g_user_ids, 0, sizeof(g_user_ids));
                 }
             }
             break;
